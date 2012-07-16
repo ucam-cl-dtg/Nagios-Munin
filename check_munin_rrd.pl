@@ -29,9 +29,9 @@ use RRDs;
 use Getopt::Long;
 use File::Find ();
 
-use vars qw($opt_V $opt_v $opt_h $opt_w $opt_c $opt_h $opt_M $opt_d $opt_H $opt_D $PROGNAME);
+use vars qw($opt_V $opt_v $opt_h $opt_w $opt_c $opt_h $opt_M $opt_d $opt_H $opt_D @opt_i $opt_o $PROGNAME);
 
-use lib "/usr/lib64/nagios/plugins" ;
+use lib "/usr/lib/nagios/plugins" ;
 use utils qw(%ERRORS &print_revision &support &usage);
 
 # Munin specific
@@ -41,7 +41,7 @@ my $cf      = "AVERAGE"; # munin stores its data in this CF for the latest.
 
 # check_munin_rrd specific
 my $DEBUG       = 0;
-my $REVISION    = "1.1";
+my $REVISION    = "12";
 my $hostname    = undef;
 my $domain      = undef;
 my $module      = undef;
@@ -71,8 +71,9 @@ GetOptions
         "d=s" => \$opt_d, "domain=s"    => \$opt_d,
         "D=s" => \$opt_D, "datadir=s"   => \$opt_D,
         "M=s" => \$opt_M, "module=s"    => \$opt_M,
-        "H=s" => \$opt_H, "hostname=s"  => \$opt_H);
-
+        "H=s" => \$opt_H, "hostname=s"  => \$opt_H,
+        "o=s" => \$opt_o, "only=s"      => \$opt_o,
+        "i=s" => \@opt_i, "ignore=s"    => \@opt_i);
 
 # check if everything is ok
 check_parameters();
@@ -89,9 +90,18 @@ if (-d $datadir."/".$domain) {
 }
 
 my $response_text       = '';
-print "Opening $rrdpath/$hostname-$module-*-g.rrd\n" if $DEBUG;
-my @rrd = <$rrdpath/$hostname-$module-*.rrd>;
-printf ($#rrd+1 ." rrd(s) found\n") if  $DEBUG;
+
+my @rrd;
+if ($opt_o) {
+    print "Opening $rrdpath/$hostname-$module-$opt_o-g.rrd\n" if $DEBUG;
+    @rrd = <$rrdpath/$hostname-$module-$opt_o-*.rrd>;
+    printf ($#rrd+1 ." rrd(s) found\n") if  $DEBUG;
+
+} else {
+    print "Opening $rrdpath/$hostname-$module-*-g.rrd\n" if $DEBUG;
+    @rrd = <$rrdpath/$hostname-$module-*.rrd>;
+    printf ($#rrd+1 ." rrd(s) found\n") if  $DEBUG;
+}
 
 # we didn't find any rrd there...
 if ($#rrd < 0) { 
@@ -118,6 +128,10 @@ foreach (@rrd) {
         my $component = sanitize($1);  # Let's have a nicer output, 
                                     #some lines from Munin are not useful var_run for module df for example
         printf($component) if $DEBUG;
+        if (@opt_i && ($component =~ /@opt_i/) ) {
+            print "\nIgnoring $component\n" if $DEBUG;
+            next;
+        }
         if ($component ne "") {
             my $mtime = (stat( $current_rrd ))[9];
             printf $mtime if $DEBUG; 
@@ -212,7 +226,7 @@ sub get_last_rrd_data {
 sub sanitize {
     my $var = shift;
     if ($opt_M eq "df") {
-            if (($var !~ m/dev/ ) || ($var =~ m/udev/) || ($var =~ m/shm/)) {   # Get rid of non physical drives
+            if (($var !~ m/dev|LVMGROUP/) || ($var =~ m/udev/) || ($var =~ m/shm/)) {   # Get rid of non physical drives
                     $var = "";
             }
             else {
@@ -319,6 +333,10 @@ sub print_help () {
        prints version number
 -D, --datadir
        In case your datadir for munin is not /var/lib/munin
+-i, --ignore=MUNIN SUBMODULE
+       Munin submodule value to ignore while fetching
+-o, --only=MUNIN SUBMODULE
+       Warning and critical values will only be checked for the Munin submodule
 EOT
 }
 
