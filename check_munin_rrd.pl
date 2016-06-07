@@ -121,6 +121,7 @@ if ($#rrd < 0) {
 }
 
 printf ($#rrd+1 ." rrd(s) found\n") if  $DEBUG;
+my $found_something = 0;
 foreach (@rrd) {
     my $current_rrd = $_;
     print "\nDoing : $current_rrd\n" if $DEBUG;
@@ -141,7 +142,9 @@ foreach (@rrd) {
             if ($seconds_diff > 600) {
                 my $formated_mtime = strftime "%d-%b-%Y %H:%M:%S %Z", localtime($mtime);
                 print "Problem on $current_rrd : data are too old, $formated_mtime\n";
-                exit $ERRORS{"UNKNOWN"};
+                next;
+            } else {
+                $found_something = 1;
             }
             print "Module_part : $component\n" if $DEBUG;
             my $value = get_last_rrd_data($current_rrd);
@@ -163,6 +166,11 @@ foreach (@rrd) {
             printf "Nothing to do \n" if $DEBUG;
         }
     }
+}
+# Didn't find any data to work with
+if (!($found_something == 1)) {
+    print "No data found to work with\n";
+    exit $ERRORS{"UNKNOWN"};
 }
 
 
